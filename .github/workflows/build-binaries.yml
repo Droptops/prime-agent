@@ -40,6 +40,11 @@ jobs:
           fetch-tags: true
           persist-credentials: false
 
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.4'
+
       - name: Resolve release context
         id: context
         env:
@@ -136,7 +141,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
+          node-version: '22.23.4'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -225,6 +230,11 @@ jobs:
         with:
           name: prime-agent-beta
           path: release-artifacts/beta
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.4'
 
       - name: Prepare installer
         run: |

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Required patched Node 22.23.4, 24.22.1, or 26.12.1 and later patches on those release lines for CVE-2026-111497.
+
 ## [0.7.0] - 2026-08-05
 
 ## [0.6.1] - 2026-08-05

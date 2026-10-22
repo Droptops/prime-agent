@@ -874,7 +874,7 @@ finish_preflight_checks() {
 	if [ "$prime_agent_screen_enabled" = 1 ]; then
 		if [ "$preflight_status" -ne 0 ]; then
 			preflight_summary=$(sed -n '1p' "$preflight_file")
-			prime_agent_screen "Node.js 20.6.0 or newer is required" "" "$preflight_summary" ""
+			prime_agent_screen "Node.js 22.23.4+ (22.x), 24.22.1+ (24.x), or 26.12.1+ (26.x) is required" "" "$preflight_summary" ""
 			sleep 0.4
 		elif [ -s "$preflight_file" ]; then
 			preflight_summary="Existing $prime_agent_cmd command found on PATH."
@@ -895,12 +895,12 @@ run_preflight_checks() {
 
 	if command -v node >/dev/null 2>&1; then
 		node_version=$(node --version)
-		if ! node -e 'const [major, minor, patch] = process.versions.node.split(".").map(Number); process.exit(major > 20 || (major === 20 && (minor > 6 || (minor === 6 && patch >= 0))) ? 0 : 1)' >/dev/null; then
-			printf 'error: Prime Agent requires Node.js 20.6.0 or newer. Found %s.\n' "$node_version"
+		if ! node_version_string_is_new_enough "$node_version"; then
+			printf 'error: Prime Agent requires Node.js 22.23.4+ (22.x), 24.22.1+ (24.x), or 26.12.1+ (26.x). Found %s.\n' "$node_version"
 			status=1
 		fi
 	else
-		printf 'error: Node.js 20.6.0 or newer is required to install Prime Agent.\n'
+		printf 'error: Node.js 22.23.4+ (22.x), 24.22.1+ (24.x), or 26.12.1+ (26.x) is required to install Prime Agent.\n'
 		status=1
 	fi
 
@@ -1010,9 +1010,9 @@ install_node_npm_interactive() {
 		prompt_status=$?
 	fi
 	if [ "$prompt_status" -eq 2 ]; then
-		printf 'No terminal detected; install Node.js 20.6.0 or newer and npm, then run this installer again.\n'
+		printf 'No terminal detected; install Node.js 22.23.4+ (22.x), 24.22.1+ (24.x), or 26.12.1+ (26.x) and npm, then run this installer again.\n'
 	else
-		printf '\nInstall Node.js 20.6.0 or newer and npm, then run this installer again.\n'
+		printf '\nInstall Node.js 22.23.4+ (22.x), 24.22.1+ (24.x), or 26.12.1+ (26.x) and npm, then run this installer again.\n'
 	fi
 	return 1
 }
@@ -1043,6 +1043,9 @@ detect_node_install_method() {
 
 apt_node_candidate_is_new_enough() {
 	version=$(apt-cache policy nodejs 2>/dev/null | awk '/Candidate:/ { print $2; exit }')
+	case "$version" in *~*|*-rc*|*-pre*|*-nightly*|*-alpha*|*-beta*) return 1 ;; esac
+	version="${version#*:}"
+	version="${version%%[-+]*}"
 	[ -n "$version" ] && [ "$version" != "(none)" ] && node_version_string_is_new_enough "$version"
 }
 
@@ -1052,27 +1055,16 @@ apk_node_candidate_is_new_enough() {
 }
 
 node_version_string_is_new_enough() {
-	version="${1#v}"
-	case "$version" in
-		[0-9]*) ;;
-		*) return 1 ;;
-	esac
-	version="${version%%[!0-9.]*}"
-	version_ifs=${IFS- }
-	IFS=.
-	set -- $version
-	IFS=$version_ifs
-	major="${1:-}"
-	minor="${2:-0}"
-	patch="${3:-0}"
-	case "$major" in ''|*[!0-9]*) return 1 ;; esac
-	case "$minor" in ''|*[!0-9]*) minor=0 ;; esac
-	case "$patch" in ''|*[!0-9]*) patch=0 ;; esac
-
-	[ "$major" -gt 20 ] && return 0
-	[ "$major" -eq 20 ] && [ "$minor" -gt 6 ] && return 0
-	[ "$major" -eq 20 ] && [ "$minor" -eq 6 ] && [ "$patch" -ge 0 ] && return 0
-	return 1
+	# Reject prereleases and unknown majors; each supported line has its own fix.
+	printf '%s\n' "${1#v}" | awk -F. '
+		!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/ { exit 1 }
+		{
+			if ($1 == 22) { minor = 23; patch = 4 }
+			else if ($1 == 24) { minor = 22; patch = 1 }
+			else if ($1 == 26) { minor = 12; patch = 1 }
+			else { exit 1 }
+			exit !($2 > minor || ($2 == minor && $3 >= patch))
+		}'
 }
 
 install_node_npm() {
