@@ -1,7 +1,12 @@
 // Dependency-free and Node-20-safe so it can never crash on the versions it rejects.
 
-const MIN_NODE_VERSION_PARTS = [22, 8, 0] as const;
-export const MIN_NODE_VERSION = MIN_NODE_VERSION_PARTS.join(".");
+export const MIN_NODE_VERSION = "22.23.4";
+export const SUPPORTED_NODE_RANGE = "^22.23.4 || ^24.22.1 || ^26.12.1";
+const PATCHED_MINIMUMS = new Map<number, readonly [number, number]>([
+	[22, [23, 4]],
+	[24, [22, 1]],
+	[26, [12, 1]],
+]);
 
 export interface NodeVersionGuardIO {
 	version: string;
@@ -15,7 +20,9 @@ interface ParsedNodeVersion {
 }
 
 function parseVersion(version: string): ParsedNodeVersion | undefined {
-	const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(version);
+	const match = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(
+		version,
+	);
 	if (!match) {
 		return undefined;
 	}
@@ -27,14 +34,11 @@ function parseVersion(version: string): ParsedNodeVersion | undefined {
 }
 
 function isSupportedNodeVersion(version: ParsedNodeVersion): boolean {
-	for (let index = 0; index < MIN_NODE_VERSION_PARTS.length; index++) {
-		const part = version.parts[index]!;
-		const minimumPart = MIN_NODE_VERSION_PARTS[index]!;
-		if (part !== minimumPart) {
-			return part > minimumPart;
-		}
-	}
-	return !version.prerelease;
+	const [major, minor, patch] = version.parts;
+	const minimum = PATCHED_MINIMUMS.get(major);
+	return Boolean(
+		!version.prerelease && minimum && (minor > minimum[0] || (minor === minimum[0] && patch >= minimum[1])),
+	);
 }
 
 export function assertNodeVersion(io: NodeVersionGuardIO): boolean {
@@ -44,13 +48,17 @@ export function assertNodeVersion(io: NodeVersionGuardIO): boolean {
 	}
 
 	const version = parseVersion(io.version);
-	if (!version || isSupportedNodeVersion(version)) {
+	if (version && isSupportedNodeVersion(version)) {
 		return true;
 	}
 
-	io.log(`prime-agent requires Node ${MIN_NODE_VERSION} or newer, but the active Node is v${io.version}.`);
+	io.log(
+		`prime-agent requires patched Node ${SUPPORTED_NODE_RANGE} (CVE-2026-111497), but the active Node is v${io.version}.`,
+	);
 	io.log("");
-	io.log(`  1. Install Node ${MIN_NODE_VERSION}+ (e.g. "nvm install 22 && nvm use 22", or from https://nodejs.org)`);
+	io.log(
+		`  1. Install Node ${MIN_NODE_VERSION} (e.g. "nvm install ${MIN_NODE_VERSION} && nvm use ${MIN_NODE_VERSION}", or from https://nodejs.org)`,
+	);
 	io.log("  2. Reinstall prime-agent under that Node so the command resolves to it:");
 	io.log("     https://github.com/PrimeIntellect-ai/prime-agent/releases/latest");
 	io.exit(1);
